@@ -15,10 +15,10 @@ from imblearn.over_sampling import SMOTE, RandomOverSampler
 from imblearn.under_sampling import RandomUnderSampler
 
 # ===============================================================
-# 1. CARICAMENTO E PREPROCESSING DEI DATI
+# FASE 1: CARICAMENTO, DIZIONARIO ED ESPLORAZIONE
 # ===============================================================
 print("="*60)
-print(" FASE 1: CARICAMENTO E PREPROCESSING")
+print(" FASE 1: CARICAMENTO, DIZIONARIO ED ESPLORAZIONE")
 print("="*60 + "\n")
 
 column_names = [
@@ -30,6 +30,23 @@ column_names = [
     'referral_source', 'target'
 ]
 
+# Definizione del dizionario delle feature
+col_desc = {
+    'age': 'Età del paziente (numerica)',
+    'sex': 'Sesso del paziente (F/M)',
+    'on_thyroxine': 'Assunzione di tiroxina (binaria)',
+    'sick': 'Presenza di altre patologie (binaria)',
+    'pregnant': 'Paziente in gravidanza (binaria)',
+    'thyroid_surgery': 'Precedenti interventi alla tiroide (binaria)',
+    'TSH': 'Ormone Tiroideo Stimolante (numerica - esame del sangue)',
+    'T3': 'Triiodotironina (numerica - esame del sangue)',
+    'TT4': 'Tiroxina totale (numerica - esame del sangue)',
+    'target': 'Diagnosi clinica - Variabile da predire (stringa)'
+}
+print("Dizionario delle Feature Principali:")
+print(pd.DataFrame.from_dict(col_desc, orient='index', columns=['Descrizione']))
+print("\n")
+
 def load_data(path):
     df = pd.read_csv(path, header=None, names=column_names, na_values='?')
     df['target'] = df['target'].str.split('|').str[0].str.strip()
@@ -39,9 +56,53 @@ def load_data(path):
 df_train = load_data('allhypo.data')
 df_test  = load_data('allhypo.test')
 
-# Rimozione colonne vuote
+# Rimozione colonne interamente vuote
 df_train = df_train.drop(columns=['TBG', 'TBG_measured'])
 df_test  = df_test.drop(columns=['TBG', 'TBG_measured'])
+
+# Analisi dei valori mancanti
+missing = pd.DataFrame({
+    'train_missing': df_train.isnull().sum(),
+    'test_missing' : df_test.isnull().sum(),
+})
+print('Colonne con valori mancanti prima dell\'imputazione:')
+print(missing[missing.sum(axis=1) > 0])
+print("\n")
+
+
+
+
+# Unione temporanea per l'analisi del dataset globale iniziale
+df_all = pd.concat([df_train, df_test], ignore_index=True)
+
+print(f"Dimensioni totali del dataset (Train + Test): {df_all.shape[0]} pazienti, {df_all.shape[1]} feature.\n")
+
+# Visualizzazione della distribuzione del dataset iniziale
+sns.set_theme(style='whitegrid', palette='muted')
+fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+
+target_counts = df_all['target'].value_counts()
+
+
+# Grafico a Torta (Percentuali)
+axes[0].pie(target_counts, labels=target_counts.index, autopct='%1.1f%%', startangle=140, colors=sns.color_palette("Set2"))
+axes[0].set_title('Distribuzione Globale Target (Percentuali)', fontweight='bold')
+
+# Grafico a Barre (Valori Assoluti)
+sns.countplot(data=df_all, y='target', ax=axes[1], order=target_counts.index, palette="Set2", hue='target', legend=False)
+axes[1].set_title('Distribuzione Globale Target (Conteggi Assoluti)', fontweight='bold')
+axes[1].set_xlabel('Numero di Pazienti')
+axes[1].set_ylabel('')
+
+plt.tight_layout()
+plt.show()
+
+# ===============================================================
+# 2. PREPROCESSING E MATRICE DI CORRELAZIONE
+# ===============================================================
+print("="*60)
+print(" FASE 2: PREPROCESSING E MATRICE DI CORRELAZIONE")
+print("="*60 + "\n")
 
 # Mappatura variabili binarie
 binary_cols = ['on_thyroxine', 'query_on_thyroxine', 'on_antithyroid_medication',
@@ -81,9 +142,6 @@ y_test = le.transform(y_test_text)
 
 print("Preprocessing completato con successo.\n")
 
-# ---------------------------------------------------------------
-# Matrice di Correlazione
-# ---------------------------------------------------------------
 print("Generazione della Matrice di Correlazione...\n")
 plt.figure(figsize=(16, 12))
 
@@ -102,10 +160,10 @@ plt.show()
 
 
 # ===============================================================
-# 2. TASK A: CLUSTERING NON SUPERVISIONATO
+# 3. TASK A: CLUSTERING NON SUPERVISIONATO
 # ===============================================================
 print("="*60)
-print(" FASE 2: CLUSTERING K-MEANS E OTTIMIZZAZIONE")
+print(" FASE 3: CLUSTERING K-MEANS E OTTIMIZZAZIONE")
 print("="*60 + "\n")
 
 # Baseline
@@ -123,18 +181,14 @@ importances_sorted = importances.sort_values(ascending=False)
 top_features = importances_sorted.head(15).index.tolist()
 X_train_selected = X_train_scaled[top_features]
 
-# ---------------------------------------------------------------
 # Visualizzazione: Feature Importances e Confronto PCA 2D
-# ---------------------------------------------------------------
 print("Generazione dei grafici per Feature Selection e PCA 2D...\n")
 fig, axes = plt.subplots(1, 3, figsize=(18, 5))
 
-# 1. Feature Importances (Top 15)
 sns.barplot(x=importances_sorted.head(15).values, y=importances_sorted.head(15).index, ax=axes[0], hue=importances_sorted.head(15).index, palette='viridis', legend=False)
 axes[0].set_title('Top 15 Feature Importanti', fontweight='bold')
 axes[0].set_xlabel('Importanza (Random Forest)')
 
-# 2. PCA 2D (Tutte le feature)
 pca_2d = PCA(n_components=2, random_state=42)
 X_pca_all = pca_2d.fit_transform(X_train_scaled)
 scatter1 = axes[1].scatter(X_pca_all[:, 0], X_pca_all[:, 1], c=y_train, cmap='tab10', alpha=0.6)
@@ -142,7 +196,6 @@ axes[1].set_title('PCA 2D - Tutte le feature originali', fontweight='bold')
 axes[1].set_xlabel('Componente Principale 1')
 axes[1].set_ylabel('Componente Principale 2')
 
-# 3. PCA 2D (Feature Selezionate)
 X_pca_sel = pca_2d.fit_transform(X_train_selected)
 scatter2 = axes[2].scatter(X_pca_sel[:, 0], X_pca_sel[:, 1], c=y_train, cmap='tab10', alpha=0.6)
 axes[2].set_title('PCA 2D - Solo feature selezionate', fontweight='bold')
@@ -151,8 +204,6 @@ axes[2].set_ylabel('Componente Principale 2')
 
 plt.tight_layout()
 plt.show()
-
-# ---------------------------------------------------------------
 
 # PCA (90% varianza) per il calcolo del clustering
 pca_full = PCA(n_components=0.90, random_state=42)
@@ -164,52 +215,12 @@ for k in range(2, 7):
     labels_k = km.fit_predict(X_train_pca_full)
     sil_scores_pca[k] = silhouette_score(X_train_pca_full, labels_k)
 
-# Undersampling su PCA
-majority_class = y_train_text.value_counts().idxmax()
-mask_majority = (y_train_text == majority_class).values
-mask_minority = ~mask_majority
-n_minority = mask_minority.sum()
-n_majority_sample = min(mask_majority.sum(), n_minority * 3)
 
-rng = np.random.RandomState(42)
-sampled_majority_idx = rng.choice(np.where(mask_majority)[0], size=n_majority_sample, replace=False)
-minority_idx = np.where(mask_minority)[0]
-balanced_idx = np.sort(np.concatenate([sampled_majority_idx, minority_idx]))
-X_train_pca_under = X_train_pca_full[balanced_idx]
-
-sil_scores_under = {}
-for k in range(2, 7):
-    km = KMeans(n_clusters=k, random_state=42, n_init=10)
-    labels_k = km.fit_predict(X_train_pca_under)
-    sil_scores_under[k] = silhouette_score(X_train_pca_under, labels_k)
-
-# Random Oversampling su PCA
-ros_clust = RandomOverSampler(random_state=42)
-X_train_pca_ros, _ = ros_clust.fit_resample(X_train_pca_full, y_train_text)
-
-sil_scores_ros = {}
-for k in range(2, 7):
-    km = KMeans(n_clusters=k, random_state=42, n_init=10)
-    labels_k = km.fit_predict(X_train_pca_ros)
-    sil_scores_ros[k] = silhouette_score(X_train_pca_ros, labels_k)
-
-# SMOTE su PCA
-smote_clust = SMOTE(random_state=42, k_neighbors=1)
-X_train_pca_smote, _ = smote_clust.fit_resample(X_train_pca_full, y_train_text)
-
-sil_scores_smote = {}
-for k in range(2, 7):
-    km = KMeans(n_clusters=k, random_state=42, n_init=10)
-    labels_k = km.fit_predict(X_train_pca_smote)
-    sil_scores_smote[k] = silhouette_score(X_train_pca_smote, labels_k)
 
 # Plot Clustering
 plt.figure(figsize=(10, 6))
 plt.plot(list(sil_scores.keys()), list(sil_scores.values()), marker='s', linestyle='--', color='gray', label='1. Baseline (Tutte le feature)')
 plt.plot(list(sil_scores_pca.keys()), list(sil_scores_pca.values()), marker='o', color='blue', label='2. FS + PCA (90%)')
-plt.plot(list(sil_scores_under.keys()), list(sil_scores_under.values()), marker='^', color='green', markersize=8, label='3. FS + PCA + Undersampling')
-plt.plot(list(sil_scores_ros.keys()), list(sil_scores_ros.values()), marker='d', color='orange', label='4. FS + PCA + Random Oversampling')
-plt.plot(list(sil_scores_smote.keys()), list(sil_scores_smote.values()), marker='x', color='red', markersize=8, label='5. FS + PCA + SMOTE')
 plt.xlabel('Numero di cluster (k)')
 plt.ylabel('Silhouette Score')
 plt.title('Task A: Qualità del Clustering (Silhouette) per metodo di Resampling', fontweight='bold')
@@ -220,10 +231,10 @@ plt.show()
 
 
 # ===============================================================
-# 3. TASK B: CLASSIFICAZIONE SUPERVISIONATA
+# 4. TASK B: CLASSIFICAZIONE SUPERVISIONATA
 # ===============================================================
 print("="*60)
-print(" FASE 3: APPRENDIMENTO SUPERVISIONATO (TASK B)")
+print(" FASE 4: APPRENDIMENTO SUPERVISIONATO (TASK B)")
 print("="*60 + "\n")
 
 datasets = {}
@@ -247,13 +258,93 @@ models = {
     'Neural Network': MLPClassifier(random_state=42, max_iter=500)
 }
 
-# Inizializzazione dizionari per le 4 metriche
 results_f1 = {model_name: [] for model_name in models.keys()}
 results_acc = {model_name: [] for model_name in models.keys()}
 results_prec = {model_name: [] for model_name in models.keys()}
 results_rec = {model_name: [] for model_name in models.keys()}
 
 dataset_names = list(datasets.keys())
+
+results_train_acc = {model_name: [] for model_name in models.keys()}
+results_test_acc = {model_name: [] for model_name in models.keys()}
+results_train_f1 = {model_name: [] for model_name in models.keys()}
+results_test_f1 = {model_name: [] for model_name in models.keys()}
+
+for data_name, (X_tr, y_tr) in datasets.items():
+    print(f"--- Addestramento sul dataset: {data_name} ---")
+    for model_name, model in models.items():
+        model.fit(X_tr, y_tr)
+        
+        # Predizioni su Train e su Test
+        y_pred_train = model.predict(X_tr)
+        y_pred_test = model.predict(X_test_scaled)
+        
+        # Calcolo Accuracy
+        train_acc = accuracy_score(y_tr, y_pred_train)
+        test_acc = accuracy_score(y_test, y_pred_test)
+        
+        # Calcolo F1-Macro
+        train_f1 = f1_score(y_tr, y_pred_train, average='macro', zero_division=0)
+        test_f1 = f1_score(y_test, y_pred_test, average='macro', zero_division=0)
+        
+        results_train_acc[model_name].append(train_acc)
+        results_test_acc[model_name].append(test_acc)
+        results_train_f1[model_name].append(train_f1)
+        results_test_f1[model_name].append(test_f1)
+        
+        print(f"{model_name:20s} -> Test Acc: {test_acc:.4f} | Test F1: {test_f1:.4f} (Train F1: {train_f1:.4f})")
+    print()
+
+# ===============================================================
+# Generazione Grafici: Confronto Overfitting
+# ===============================================================
+x = np.arange(len(dataset_names))
+width = 0.12  # Barre più sottili per raggruppare train e test per ogni modello
+
+fig, axes = plt.subplots(2, 1, figsize=(14, 14))
+
+# Plot 1: Train vs Test Accuracy
+ax1 = axes[0]
+multiplier = 0
+for model_name in models.keys():
+    offset = width * multiplier * 2.5
+    
+    # Train (con tratteggio per distinguerlo dal test)
+    ax1.bar(x + offset, results_train_acc[model_name], width, label=f'{model_name} (Train)', alpha=0.6, hatch='//')
+    # Test (tinta unita)
+    ax1.bar(x + offset + width, results_test_acc[model_name], width, label=f'{model_name} (Test)')
+    
+    multiplier += 1
+
+ax1.set_ylabel('Accuracy Score')
+ax1.set_title('Confronto Overfitting: Train Accuracy vs Testing Accuracy', fontweight='bold')
+ax1.set_xticks(x + width * 3)
+ax1.set_xticklabels(dataset_names)
+ax1.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+ax1.set_ylim(0, 1.1)
+ax1.grid(axis='y', linestyle='--', alpha=0.7)
+
+# Plot 2: Train vs Test F1-Macro
+ax2 = axes[1]
+multiplier = 0
+for model_name in models.keys():
+    offset = width * multiplier * 2.5
+    
+    ax2.bar(x + offset, results_train_f1[model_name], width, label=f'{model_name} (Train)', alpha=0.6, hatch='//')
+    ax2.bar(x + offset + width, results_test_f1[model_name], width, label=f'{model_name} (Test)')
+    
+    multiplier += 1
+
+ax2.set_ylabel('F1-Macro Score')
+ax2.set_title('Confronto Overfitting: Train F1-Macro vs Testing F1-Macro', fontweight='bold')
+ax2.set_xticks(x + width * 3)
+ax2.set_xticklabels(dataset_names)
+ax2.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+ax2.set_ylim(0, 1.1)
+ax2.grid(axis='y', linestyle='--', alpha=0.7)
+
+plt.tight_layout()
+plt.show()
 
 for data_name, (X_tr, y_tr) in datasets.items():
     print(f"--- Addestramento sul dataset: {data_name} ---")
@@ -274,9 +365,7 @@ for data_name, (X_tr, y_tr) in datasets.items():
         print(f"{model_name:20s} -> Acc: {acc:.4f} | Prec: {prec:.4f} | Rec: {rec:.4f} | F1: {f1:.4f}")
     print()
 
-# ===============================================================
-# Plot Classificazione Supervisionata (Griglia 2x2 per le metriche)
-# ===============================================================
+# Plot Classificazione Supervisionata
 x = np.arange(len(dataset_names))
 width = 0.25
 
